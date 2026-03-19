@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+
+{% block title %}Админ панель{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+    <h1 class="admin-title">📊 Админ панель</h1>
+    <a href="#" class="admin-logout" id="logoutBtn">Выйти</a>
+</div>
+
+<div class="admin-actions">
+    <button class="btn btn-primary" id="resetDayBtn" style="margin-bottom: 20px;">
+        🆕 Новый день (сброс всех данных)
+    </button>
+    
+    <a href="/admin/qr-codes" class="btn" target="_blank" style="display: inline-block; margin-bottom: 20px;">
+        📱 Скачать QR-коды для столов
+    </a>
+</div>
+
+<div id="tablesContainer">
+    <h2>Активные столы</h2>
+    <div class="tables-grid" id="tablesGrid">
+        <!-- Будут загружены через JS -->
+    </div>
+</div>
+
+<div id="ordersContainer" style="margin-top: 40px;">
+    <h2>Последние заказы</h2>
+    <div class="orders-list" id="ordersList">
+        <!-- Будут загружены через JS -->
+    </div>
+</div>
+
+<script>
+let ws = null;
+let updateInterval = null;
+
+// Подключение к WebSocket для уведомлений
+function connectWebSocket() {
+    ws = new WebSocket(`ws://${window.location.host}/admin/ws`);
+    
+    ws.onmessage = function(event) {
+        const data = JSON.parse(event.data);
+        
+        switch(data.type) {
+            case 'new_order':
+                showNotification(`🎤 Новый заказ: Стол ${data.data.table}`, 'success');
+                loadData(); // Перезагружаем данные
+                break;
+            case 'table_updated':
+            case 'table_closed':
+                loadData(); // Обновляем данные
+                break;
+            case 'system_reset':
+                showNotification('🔄 Система сброшена', 'warning');
+                loadData();
+                break;
+        }
+    };
+    
+    ws.onclose = function() {
+        // Пытаемся переподключиться через 5 секунд
+        setTimeout(connectWebSocket, 5000);
+    };
+}
+
+// Загрузка данных
+async function loadData() {
+    try {
+        const response = await fetch('/api/admin/tables');
+        const data = await response.json();
+        
+        renderTables(data.tables);
+        renderOrders(data.pending_orders);
+        
+    } catch (error) {
+        console.error('Ошибка загрузки:', error);
+        showNotification('Ошибка загрузки данных', 'error');
+    }
+}
+
+// Рендеринг столов
+function renderTables(tables) {
+    const grid = document.getElementById('tablesGrid');
+    
+    if (tables.length === 0) {
+        grid.innerHTML = '<div class="song-card">Нет активных столов</div>';
+        return;
+    }
+    
+    grid.innerHTML = tables.map(table => `
+        <div class="table-card" id="table-${table.table_number}">
+            <div class="table-card-header">
+                <span class="table-card-number">Стол ${table.table_number}</span>
+                <span class="table-card-debt">${table.total_debt}₽</span>
+            </div>
+            <div class="table-card-info">
+                <p>Гость: ${table.current_user_name || '—'}</p>
+                ${table.locked_until ? `
+                    <p class="timer-small">⏳ Заблокирован до ${new Date(table.locked_until).toLocaleTimeString()}</p>
+                ` : ''}
+            </div>
+            <div class="table-card-actions">
+                <button class="action-btn pay" onclick="markAsPaid(${table.table_number})">
+                    ✅ Оплачено
+                </button>
+                <button class="action-btn close" onclick="closeTable(${table.table_number})">
+                    🚪 Закрыть столик
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+
+// Рендеринг заказов
+function renderOrders(orders) {
+    const list = document.getElementById('ordersList');
+    
+    if (orders.length === 0) {
+        list.innerHTML = '<div class="song-card">Нет ожидающих заказов</div>';
+        return;
+    }
+    
+    list.innerHTML = orders.map(order => `
+        <div class="song-card">
+            <div style="display: flex; justify-content: space-between;">
+                <span class="table-badge">Стол ${order.table_number}</span>
+                <span class="${order.order_type === 'free' ? 'price-free' : 'price-paid'}">
+                    ${order.price}₽
+                </span>
+            </div>
+            <div class="song-title">${order.title} - ${order.artist}</div>
+            <div style="display: flex; justify-content: space-between; margin-top: 8px;">
+                <span>Гость: ${order.user_name}</span>
+                <span class="hint">${new Date(order.created_at).toLocaleTimeString()}</span>
+            </div>
+        </div>
+    `).join('');
+}
+
+// Действия админа
+async function markAsPaid(table) {
+    if (!confirm(`Отметить стол ${table} как оплаченный?`)) return;
+    
+    try {
+        const response = await fetch(`/api/admin/table/${table}/pay`, {
+            method: 'POST'
+        });
+        
+        if (response.ok) {
+            showNotification(`✅ Стол ${table} оплачен`, 'success');
+            loadData();
+        }
+    } catch (error) {
+        showNotification('Ошибка', 'error');
+    }
+}
+
+async function closeTable(table) {
+    if (!confirm(`Закрыть столик ${table}? Гости ушли.`)) return;
+    
+    try {
+        const response = await fetch(`/api/admin/table/${table}/close`, {
+            method: 'POST'
+        });
+        
+        if (response.ok) {
+            showNotification(`🚪 Стол ${table} закрыт`, 'warning');
+            loadData();
+        }
+    } catch (error) {
+        showNotification('Ошибка', 'error');
+    }
+}
+
+// Сброс дня
+document.getElementById('resetDayBtn').addEventListener('click', async function() {
+    if (!confirm('⚠️ ВНИМАНИЕ! Это удалит ВСЕ заказы и сбросит все столики. Продолжить?')) return;
+    if (!confirm('Точно? Все данные будут потеряны!')) return;
+    
+    try {
+        const response = await fetch('/api/admin/reset', {
+            method: 'POST'
+        });
+        
+        if (response.ok) {
+            showNotification('🔄 Новый день начат!', 'success');
+            loadData();
+        }
+    } catch (error) {
+        showNotification('Ошибка', 'error');
+    }
+});
+
+// Выход
+document.getElementById('logoutBtn').addEventListener('click', function(e) {
+    e.preventDefault();
+    document.cookie = 'admin_auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+    window.location.href = '/admin';
+});
+
+// Уведомления
+function showNotification(message, type) {
+    const notification = document.getElementById('notification');
+    notification.textContent = message;
+    notification.className = `notification ${type}`;
+    notification.style.display = 'block';
+    
+    setTimeout(() => {
+        notification.style.display = 'none';
+    }, 3000);
+}
+
+// Запуск
+connectWebSocket();
+loadData();
+
+// Обновление каждые 10 секунд
+setInterval(loadData, 10000);
+</script>
+
+<style>
+.timer-small {
+    font-size: 12px;
+    color: var(--tg-warning);
+    margin-top: 4px;
+}
+
+.orders-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+</style>
+{% endblock %}
