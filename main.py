@@ -387,45 +387,67 @@ async def admin_dashboard(request: Request, admin_auth: Optional[str] = Cookie(N
 
 @app.get("/api/admin/tables")
 async def admin_get_tables(admin_auth: Optional[str] = Cookie(None)):
-    """API для получения всех столов"""
+    """API для получения всех столов с группировкой по гостям"""
     if admin_auth != "true":
         raise HTTPException(status_code=401, detail="Не авторизован")
     
     try:
-        tables = db.get_all_tables()
-        orders = db.get_pending_orders()
+        # Получаем все заказы
+        all_orders = db.get_pending_orders()
         
-        app_logger.info(f"Админ запросил данные: {len(tables)} столов, {len(orders)} заказов")
+        # Группируем по столам
+        tables_dict = {}
+        
+        for order in all_orders:
+            table_num = order['table_number']  # или 'table' - зависит от структуры
+            
+            if table_num not in tables_dict:
+                tables_dict[table_num] = {
+                    'table': table_num,
+                    'total': 0,
+                    'guests': set(),  # используем set для уникальных гостей
+                    'orders': [],
+                    'locked_until': order.get('locked_until'),
+                    'is_locked': order.get('is_locked', False)
+                }
+            
+            # Добавляем гостя (если есть поле с именем)
+            if 'user_name' in order:
+                tables_dict[table_num]['guests'].add(order['user_name'])
+            
+            # Считаем сумму
+            price = FREE_PRICE if order.get('order_type') == 'free' else PAID_PRICE
+            tables_dict[table_num]['total'] += price
+            
+            # Сохраняем заказ для деталей
+            tables_dict[table_num]['orders'].append({
+                'song_name': order.get('song_name', ''),
+                'user_name': order.get('user_name', ''),
+                'price': price,
+                'time': order.get('created_at', ''),
+                'order_type': order.get('order_type', '')
+            })
+        
+        # Преобразуем set в список для JSON
+        result_tables = []
+        for table_num, data in tables_dict.items():
+            data['guests'] = list(data['guests'])
+            result_tables.append(data)
+        
+        # Сортируем по номеру стола
+        result_tables.sort(key=lambda x: x['table'])
+        
+        app_logger.info(f"Админ запросил данные: {len(result_tables)} столов с группировкой гостей")
         
         return {
-            "tables": tables,
-            "pending_orders": orders
+            "tables": result_tables,
+            "pending_orders": all_orders  # оставляем для обратной совместимости
         }
+        
     except Exception as e:
         error_logger.error(f"Ошибка получения данных для админа: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки данных")
-
-@app.post("/api/admin/table/{table}/pay")
-async def admin_mark_paid(table: int, admin_auth: Optional[str] = Cookie(None)):
-    """Отметить стол как оплаченный"""
-    if admin_auth != "true":
-        raise HTTPException(status_code=401, detail="Не авторизован")
-    
-    try:
-        db.mark_table_as_paid(table)
-        app_logger.info(f"Админ отметил стол {table} как оплаченный")
         
-        # Уведомляем админов об обновлении
-        await notify_admins({
-            "type": "table_updated",
-            "data": {"table": table}
-        })
-        
-        return {"success": True}
-    except Exception as e:
-        error_logger.error(f"Ошибка при оплате стола {table}: {e}")
-        raise HTTPException(status_code=500, detail="Ошибка при оплате")
-
 @app.post("/api/admin/table/{table}/close")
 async def admin_close_table(table: int, admin_auth: Optional[str] = Cookie(None)):
     """Закрыть столик"""
