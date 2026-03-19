@@ -10,12 +10,12 @@ import asyncio
 import logging  # Добавлено для логирования
 import traceback  # Добавлено для детального вывода ошибок
 from typing import Optional
-import qrcode
-from io import BytesIO
-import base64
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.units import mm
+# import qrcode
+# from io import BytesIO
+# import base64
+# from reportlab.pdfgen import canvas
+# from reportlab.lib.pagesizes import A4
+# from reportlab.lib.units import mm
 import os
 
 from database import Database
@@ -521,81 +521,81 @@ async def admin_websocket(websocket: WebSocket):
         if websocket in admin_connections:
             admin_connections.remove(websocket)
 
-# ========== QR-КОДЫ ==========
+# # ========== QR-КОДЫ ==========
 
-@app.get("/admin/qr-codes")
-async def generate_qr_codes(admin_auth: Optional[str] = Cookie(None)):
-    """Генерирует PDF с QR-кодами для всех столов"""
-    if admin_auth != "true":
-        raise HTTPException(status_code=401, detail="Не авторизован")
+# @app.get("/admin/qr-codes")
+# async def generate_qr_codes(admin_auth: Optional[str] = Cookie(None)):
+#     """Генерирует PDF с QR-кодами для всех столов"""
+#     if admin_auth != "true":
+#         raise HTTPException(status_code=401, detail="Не авторизован")
     
-    try:
-        # Создаем PDF
-        pdf_path = "qr_codes/tables_qr.pdf"
-        c = canvas.Canvas(pdf_path, pagesize=A4)
-        width, height = A4
+#     try:
+#         # Создаем PDF
+#         pdf_path = "qr_codes/tables_qr.pdf"
+#         c = canvas.Canvas(pdf_path, pagesize=A4)
+#         width, height = A4
         
-        # Размеры QR-кода (40x40 мм)
-        qr_size = 40 * mm
-        margin = 10 * mm
+#         # Размеры QR-кода (40x40 мм)
+#         qr_size = 40 * mm
+#         margin = 10 * mm
         
-        # Генерируем QR-коды для всех столов
-        x = margin
-        y = height - margin - qr_size
-        col = 0
-        max_cols = 4  # 4 QR-кода в ряд
+#         # Генерируем QR-коды для всех столов
+#         x = margin
+#         y = height - margin - qr_size
+#         col = 0
+#         max_cols = 4  # 4 QR-кода в ряд
         
-        for table in range(MIN_TABLE, MAX_TABLE + 1):
-            # URL для стола
-            url = f"{SITE_DOMAIN}/menu?table={table}"
+#         for table in range(MIN_TABLE, MAX_TABLE + 1):
+#             # URL для стола
+#             url = f"{SITE_DOMAIN}/menu?table={table}"
             
-            # Генерируем QR-код
-            qr = qrcode.QRCode(
-                version=1,
-                box_size=10,
-                border=5,
-            )
-            qr.add_data(url)
-            qr.make(fit=True)
-            qr_img = qr.make_image(fill_color="black", back_color="white")
+#             # Генерируем QR-код
+#             qr = qrcode.QRCode(
+#                 version=1,
+#                 box_size=10,
+#                 border=5,
+#             )
+#             qr.add_data(url)
+#             qr.make(fit=True)
+#             qr_img = qr.make_image(fill_color="black", back_color="white")
             
-            # Сохраняем временно
-            temp_path = f"qr_codes/table_{table}.png"
-            qr_img.save(temp_path)
+#             # Сохраняем временно
+#             temp_path = f"qr_codes/table_{table}.png"
+#             qr_img.save(temp_path)
             
-            # Вставляем в PDF
-            c.drawImage(temp_path, x, y, width=qr_size, height=qr_size)
-            c.setFont("Helvetica", 12)
-            c.drawString(x + qr_size/2 - 15, y - 10, f"Стол {table}")
+#             # Вставляем в PDF
+#             c.drawImage(temp_path, x, y, width=qr_size, height=qr_size)
+#             c.setFont("Helvetica", 12)
+#             c.drawString(x + qr_size/2 - 15, y - 10, f"Стол {table}")
             
-            # Переходим к следующей позиции
-            x += qr_size + margin
-            col += 1
+#             # Переходим к следующей позиции
+#             x += qr_size + margin
+#             col += 1
             
-            if col >= max_cols:
-                col = 0
-                x = margin
-                y -= (qr_size + margin + 20)  # +20 для подписи
-                if y < margin:  # Новая страница
-                    c.showPage()
-                    y = height - margin - qr_size
+#             if col >= max_cols:
+#                 col = 0
+#                 x = margin
+#                 y -= (qr_size + margin + 20)  # +20 для подписи
+#                 if y < margin:  # Новая страница
+#                     c.showPage()
+#                     y = height - margin - qr_size
             
-            # Удаляем временный файл
-            os.remove(temp_path)
+#             # Удаляем временный файл
+#             os.remove(temp_path)
         
-        c.save()
+#         c.save()
         
-        app_logger.info(f"Сгенерирован PDF с QR-кодами для столов {MIN_TABLE}-{MAX_TABLE}")
+#         app_logger.info(f"Сгенерирован PDF с QR-кодами для столов {MIN_TABLE}-{MAX_TABLE}")
         
-        return FileResponse(
-            pdf_path,
-            media_type='application/pdf',
-            filename=f'qr_codes_stoly_{MIN_TABLE}-{MAX_TABLE}.pdf'
-        )
+#         return FileResponse(
+#             pdf_path,
+#             media_type='application/pdf',
+#             filename=f'qr_codes_stoly_{MIN_TABLE}-{MAX_TABLE}.pdf'
+#         )
         
-    except Exception as e:
-        error_logger.error(f"Ошибка генерации QR-кодов: {e}")
-        raise HTTPException(status_code=500, detail="Ошибка генерации QR-кодов")
+#     except Exception as e:
+#         error_logger.error(f"Ошибка генерации QR-кодов: {e}")
+#         raise HTTPException(status_code=500, detail="Ошибка генерации QR-кодов")
 
 # ========== ЗАПУСК ==========
 application = app
