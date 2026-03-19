@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}Вход для администратора{% endblock %}
+
+{% block content %}
+<div class="welcome-screen">
+    <div class="logo">
+        <h1>🔐 АДМИН</h1>
+        <p class="subtitle">Вход в панель управления</p>
+    </div>
+    
+    <div class="login-form">
+        {% if error %}
+        <div class="notification error" style="display: block; margin-bottom: 20px;">
+            {{ error }}
+        </div>
+        {% endif %}
+        
+        <form id="adminLoginForm">
+            <div class="input-group">
+                <input type="password" 
+                       id="password" 
+                       placeholder="Пароль" 
+                       required 
+                       autocomplete="off">
+            </div>
+            
+            <button type="submit" class="btn btn-primary btn-large">
+                Войти
+            </button>
+        </form>
+        
+        <p class="hint">Только для персонала</p>
+    </div>
+</div>
+
+<script>
+document.getElementById('adminLoginForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const password = document.getElementById('password').value;
+    
+    try {
+        const response = await fetch('/admin/login', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({password: password})
+        });
+        
+        if (response.ok) {
+            window.location.href = '/admin/dashboard';
+        } else {
+            const error = await response.json();
+            showNotification(error.detail || 'Неверный пароль', 'error');
+        }
+    } catch (error) {
+        showNotification('Ошибка соединения', 'error');
+    }
+});
+
+function showNotification(message, type) {
+    const notification = document.getElementById('notification');
+    notification.textContent = message;
+    notification.className = `notification ${type}`;
+    notification.style.display = 'block';
+    
+    setTimeout(() => {
+        notification.style.display = 'none';
+    }, 3000);
+}
+</script>
+{% endblock %}

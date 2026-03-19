@@ -1,0 +1,401 @@
+{% extends "base.html" %}
+
+{% block title %}Стол {{ table_number }} | Караоке{% endblock %}
+
+{% block content %}
+<div class="table-header">
+    <div class="table-info">
+        <span class="table-badge">Стол {{ table_number }}</span>
+        <span class="name-badge">{{ user_name }}</span>
+    </div>
+    <div class="debt-badge" id="debtDisplay">Долг: 0₽</div>
+</div>
+
+<div id="lockTimer" class="timer" style="display: none;">
+    ⏳ Следующий заказ через <span id="timerSeconds">1:00</span>
+</div>
+
+<div class="songs-container">
+    <div class="tabs">
+        <div class="tab active" data-tab="free">🎵 Новые (300₽)</div>
+        <div class="tab" data-tab="paid">🔄 Повторы (1000₽)</div>
+    </div>
+
+    <!-- Список новых песен -->
+    <div id="freeSongs" class="song-list"></div>
+    
+    <!-- Список повторов -->
+    <div id="paidSongs" class="song-list" style="display: none;"></div>
+
+    <!-- Пагинация -->
+    <div class="pagination" id="pagination">
+        <button class="page-btn" id="prevPage" disabled>←</button>
+        <span class="page-info" id="pageInfo">1/1</span>
+        <button class="page-btn" id="nextPage" disabled>→</button>
+    </div>
+</div>
+
+<!-- Модальное окно подтверждения заказа -->
+<div id="orderModal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <h3>Подтверждение заказа</h3>
+        <p id="orderSongInfo"></p>
+        <p id="orderPrice"></p>
+        <div class="modal-actions">
+            <button class="btn" onclick="closeModal()">Отмена</button>
+            <button class="btn btn-primary" id="confirmOrder">Подтвердить</button>
+        </div>
+    </div>
+</div>
+
+<input type="hidden" id="tableNumber" value="{{ table_number }}">
+<input type="hidden" id="sessionId" value="{{ session_id }}">
+
+<script>
+// Состояние приложения
+let currentTab = 'free';
+let freePage = 0;
+let paidPage = 0;
+let itemsPerPage = 5;
+let songs = {
+    free: [],
+    paid: []
+};
+let lockTimer = null;
+let lockRemaining = 0;
+let debt = 0;
+let selectedSong = null;
+
+// Элементы DOM
+const freeSongsEl = document.getElementById('freeSongs');
+const paidSongsEl = document.getElementById('paidSongs');
+const prevBtn = document.getElementById('prevPage');
+const nextBtn = document.getElementById('nextPage');
+const pageInfo = document.getElementById('pageInfo');
+const lockTimerEl = document.getElementById('lockTimer');
+const timerSecondsEl = document.getElementById('timerSeconds');
+const debtDisplay = document.getElementById('debtDisplay');
+const tableNumber = document.getElementById('tableNumber').value;
+const sessionId = document.getElementById('sessionId').value;
+
+// Загрузка песен при старте
+loadSongs();
+loadTableStatus();
+
+// Переключение вкладок
+document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', function() {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        this.classList.add('active');
+        
+        currentTab = this.dataset.tab;
+        
+        if (currentTab === 'free') {
+            freeSongsEl.style.display = 'block';
+            paidSongsEl.style.display = 'none';
+            renderSongs('free', freePage);
+        } else {
+            freeSongsEl.style.display = 'none';
+            paidSongsEl.style.display = 'block';
+            renderSongs('paid', paidPage);
+        }
+    });
+});
+
+// Пагинация
+prevBtn.addEventListener('click', () => {
+    if (currentTab === 'free' && freePage > 0) {
+        freePage--;
+        renderSongs('free', freePage);
+    } else if (currentTab === 'paid' && paidPage > 0) {
+        paidPage--;
+        renderSongs('paid', paidPage);
+    }
+});
+
+nextBtn.addEventListener('click', () => {
+    const totalPages = Math.ceil(songs[currentTab].length / itemsPerPage);
+    const currentPage = currentTab === 'free' ? freePage : paidPage;
+    
+    if (currentPage < totalPages - 1) {
+        if (currentTab === 'free') {
+            freePage++;
+            renderSongs('free', freePage);
+        } else {
+            paidPage++;
+            renderSongs('paid', paidPage);
+        }
+    }
+});
+
+// Подтверждение заказа
+document.getElementById('confirmOrder').addEventListener('click', async function() {
+    if (!selectedSong) return;
+    
+    try {
+        const response = await fetch('/api/order', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                table: parseInt(tableNumber),
+                session: sessionId,
+                song_id: selectedSong.song_id,
+                type: selectedSong.type
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.detail || 'Ошибка заказа');
+        }
+        
+        showNotification('✅ Заказ принят!', 'success');
+        closeModal();
+        
+        // Перезагружаем список песен и статус стола
+        await loadSongs();
+        await loadTableStatus();
+        
+    } catch (error) {
+        console.error('Ошибка:', error);
+        showNotification('❌ ' + error.message, 'error');
+        closeModal();
+    }
+});
+
+// Загрузка песен
+async function loadSongs() {
+    try {
+        const response = await fetch(`/api/songs?table=${tableNumber}&session=${sessionId}`);
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.detail || 'Ошибка загрузки');
+        }
+        
+        songs.free = data.available || [];
+        songs.paid = data.paid || [];
+        lockRemaining = data.lock_remaining || 0;
+        debt = data.debt || 0;
+        
+        // Обновляем отображение
+        updateLockTimer(lockRemaining);
+        updateDebt(debt);
+        
+        // Рендерим текущую вкладку
+        if (currentTab === 'free') {
+            renderSongs('free', freePage);
+        } else {
+            renderSongs('paid', paidPage);
+        }
+        
+    } catch (error) {
+        console.error('Ошибка загрузки песен:', error);
+        showNotification('Ошибка загрузки', 'error');
+    }
+}
+
+// Загрузка статуса стола
+async function loadTableStatus() {
+    try {
+        const response = await fetch(`/api/table/${tableNumber}/status`);
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.detail || 'Ошибка загрузки статуса');
+        }
+        
+        if (data.remaining > 0) {
+            updateLockTimer(data.remaining);
+        } else {
+            stopLockTimer();
+        }
+        
+        updateDebt(data.debt || 0);
+        
+    } catch (error) {
+        console.error('Ошибка загрузки статуса:', error);
+    }
+}
+
+// Рендеринг песен
+function renderSongs(type, page) {
+    const songList = type === 'free' ? songs.free : songs.paid;
+    const container = type === 'free' ? freeSongsEl : paidSongsEl;
+    
+    const start = page * itemsPerPage;
+    const end = start + itemsPerPage;
+    const pageSongs = songList.slice(start, end);
+    
+    if (pageSongs.length === 0) {
+        container.innerHTML = '<div class="song-card" style="text-align: center;">Нет песен в этой категории</div>';
+    } else {
+        container.innerHTML = pageSongs.map(song => `
+            <div class="song-card" onclick="selectSong(${JSON.stringify(song).replace(/"/g, '&quot;')}, '${type}')">
+                <div class="song-title">${song.title}</div>
+                <div class="song-artist">${song.artist}</div>
+                <span class="song-price ${type === 'free' ? 'price-free' : 'price-paid'}">
+                    ${type === 'free' ? '300₽' : '1000₽'}
+                </span>
+            </div>
+        `).join('');
+    }
+    
+    // Обновляем пагинацию
+    const totalPages = Math.ceil(songList.length / itemsPerPage);
+    pageInfo.textContent = `${page + 1}/${Math.max(1, totalPages)}`;
+    prevBtn.disabled = page === 0;
+    nextBtn.disabled = page >= totalPages - 1;
+}
+
+// Выбор песни
+function selectSong(song, type) {
+    if (lockRemaining > 0) {
+        showNotification(`Стол заблокирован ещё ${formatTime(lockRemaining)}`, 'warning');
+        return;
+    }
+    
+    selectedSong = {
+        song_id: song.song_id,
+        title: song.title,
+        artist: song.artist,
+        type: type,
+        price: type === 'free' ? 300 : 1000
+    };
+    
+    document.getElementById('orderSongInfo').textContent = 
+        `${song.title} - ${song.artist}`;
+    document.getElementById('orderPrice').textContent = 
+        `Стоимость: ${type === 'free' ? '300₽' : '1000₽'}`;
+    
+    document.getElementById('orderModal').style.display = 'flex';
+}
+
+// Закрыть модальное окно
+function closeModal() {
+    document.getElementById('orderModal').style.display = 'none';
+    selectedSong = null;
+}
+
+// Таймер блокировки
+function startLockTimer(seconds) {
+    lockRemaining = seconds;
+    if (lockTimerEl) lockTimerEl.style.display = 'block';
+    
+    if (lockTimer) clearInterval(lockTimer);
+    
+    lockTimer = setInterval(() => {
+        lockRemaining--;
+        
+        if (lockRemaining <= 0) {
+            stopLockTimer();
+            loadSongs(); // Перезагружаем песни (кнопка разблокируется)
+        } else {
+            if (timerSecondsEl) timerSecondsEl.textContent = formatTime(lockRemaining);
+        }
+    }, 1000);
+    
+    if (timerSecondsEl) timerSecondsEl.textContent = formatTime(seconds);
+}
+
+function stopLockTimer() {
+    if (lockTimer) {
+        clearInterval(lockTimer);
+        lockTimer = null;
+    }
+    if (lockTimerEl) lockTimerEl.style.display = 'none';
+    lockRemaining = 0;
+}
+
+function formatTime(seconds) {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+// Обновление долга
+function updateDebt(newDebt) {
+    debt = newDebt;
+    if (debtDisplay) {
+        debtDisplay.textContent = `Долг: ${debt}₽`;
+    }
+}
+
+// Обновление таймера блокировки
+function updateLockTimer(seconds) {
+    if (seconds > 0) {
+        if (lockTimerEl) lockTimerEl.style.display = 'block';
+        if (timerSecondsEl) timerSecondsEl.textContent = formatTime(seconds);
+        startLockTimer(seconds);
+    } else {
+        if (lockTimerEl) lockTimerEl.style.display = 'none';
+        if (lockTimer) {
+            clearInterval(lockTimer);
+            lockTimer = null;
+        }
+    }
+}
+
+// Автоматическое обновление каждые 30 секунд
+setInterval(() => {
+    loadSongs();
+    loadTableStatus();
+}, 30000);
+
+// Уведомления
+function showNotification(message, type) {
+    const notification = document.getElementById('notification');
+    if (!notification) return;
+    
+    notification.textContent = message;
+    notification.className = `notification ${type}`;
+    notification.style.display = 'block';
+    
+    setTimeout(() => {
+        notification.style.display = 'none';
+    }, 3000);
+}
+</script>
+
+<style>
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+}
+
+.modal-content {
+    background: white;
+    padding: 24px;
+    border-radius: 16px;
+    max-width: 90%;
+    width: 400px;
+}
+
+.modal-content h3 {
+    margin-bottom: 16px;
+}
+
+.modal-content p {
+    margin-bottom: 12px;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 24px;
+}
+
+.modal-actions .btn {
+    flex: 1;
+}
+</style>
+{% endblock %}

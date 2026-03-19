@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block title %}Вход в караоке{% endblock %}
+
+{% block content %}
+<div class="welcome-screen">
+    <div class="logo">
+        <h1>🎤 КАРАОКЕ</h1>
+        <p class="subtitle">Заказывай песни прямо с телефона</p>
+    </div>
+    
+    {% if current_session %}
+        <div class="active-session">
+            <p>Вы уже зашли как:</p>
+            <div class="session-info">
+                <span class="table-badge">Стол {{ current_session.table_number }}</span>
+                <span class="name-badge">{{ current_session.user_name }}</span>
+            </div>
+            <a href="/menu?table={{ current_session.table_number }}&name={{ current_session.user_name }}" class="btn btn-primary">
+                Перейти в меню →
+            </a>
+            <button class="btn btn-link" id="newSessionBtn">Это не я</button>
+        </div>
+        
+        <div class="login-form" id="loginForm" style="display: none;">
+    {% else %}
+        <div class="login-form">
+    {% endif %}
+    
+        <h2>Введите номер стола</h2>
+        <form id="tableForm">
+            <div class="input-group">
+                <input type="number" 
+                       id="tableNumber" 
+                       min="1" 
+                       max="30" 
+                       placeholder="Номер стола" 
+                       required 
+                       autocomplete="off"
+                       inputmode="numeric"
+                       pattern="[0-9]*">
+            </div>
+            
+            <div class="input-group">
+                <input type="text" 
+                       id="userName" 
+                       placeholder="Ваше имя" 
+                       required 
+                       autocomplete="off"
+                       maxlength="20">
+            </div>
+            
+            <button type="submit" class="btn btn-primary btn-large">
+                Войти в караоке
+            </button>
+        </form>
+        
+        <p class="hint">Подсказка: номер стола написан на столике</p>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    {% if current_session %}
+    document.getElementById('newSessionBtn').addEventListener('click', function() {
+        document.querySelector('.active-session').style.display = 'none';
+        document.getElementById('loginForm').style.display = 'block';
+    });
+    {% endif %}
+    
+    document.getElementById('tableForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const table = document.getElementById('tableNumber').value;
+        const name = document.getElementById('userName').value.trim();
+        
+        if (!table || !name) {
+            showNotification('Заполните все поля', 'error');
+            return;
+        }
+        
+        // Переходим в меню
+        window.location.href = `/menu?table=${table}&name=${encodeURIComponent(name)}`;
+    });
+});
+
+function showNotification(message, type) {
+    const notification = document.getElementById('notification');
+    notification.textContent = message;
+    notification.className = `notification ${type}`;
+    notification.style.display = 'block';
+    
+    setTimeout(() => {
+        notification.style.display = 'none';
+    }, 3000);
+}
+</script>
+{% endblock %}
