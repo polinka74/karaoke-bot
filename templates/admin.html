@@ -90,16 +90,19 @@ function renderTables(tables) {
     }
     
     grid.innerHTML = tables.map(table => {
+        // ✅ ИСПРАВЛЕНО: используем table.table, а не table.table_number
+        const tableNumber = table.table || '?';
+        
         // Формируем список гостей
         const guestsList = table.guests && table.guests.length > 0 
             ? table.guests.join(', ') 
-            : (table.current_user_name || '—');
+            : '—';
         
         return `
-        <div class="table-card" id="table-${table.table_number}">
+        <div class="table-card" id="table-${tableNumber}">
             <div class="table-card-header">
-                <span class="table-card-number">Стол ${table.table_number}</span>
-                <span class="table-card-debt">${table.total || table.total_debt || 0}₽</span>
+                <span class="table-card-number">Стол ${tableNumber}</span>
+                <span class="table-card-debt">${table.total || 0}₽</span>
             </div>
             <div class="table-card-info">
                 <p><strong>Гости:</strong> ${guestsList}</p>
@@ -108,17 +111,17 @@ function renderTables(tables) {
                 ` : ''}
             </div>
             <div class="table-card-actions">
-                <button class="action-btn pay" onclick="markAsPaid(${table.table_number})">
+                <button class="action-btn pay" onclick="markAsPaid(${tableNumber})">
                     ✅ Оплачено
                 </button>
-                <button class="action-btn close" onclick="closeTable(${table.table_number})">
+                <button class="action-btn close" onclick="closeTable(${tableNumber})">
                     🚪 Закрыть столик
                 </button>
             </div>
         </div>
     `}).join('');
 }
-
+    
 // Рендеринг заказов
 function renderOrders(orders) {
     const list = document.getElementById('ordersList');
