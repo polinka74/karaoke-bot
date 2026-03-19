@@ -576,7 +576,7 @@ async def generate_qr_codes(admin_auth: Optional[str] = Cookie(None)):
         raise HTTPException(status_code=500, detail="Ошибка генерации QR-кодов")
 
 # ========== ЗАПУСК ==========
-
+application = app
 
 if __name__ == "__main__":
     import uvicorn
