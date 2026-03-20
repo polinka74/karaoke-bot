@@ -172,6 +172,9 @@ async def notify_admins(message: dict):
 async def send_telegram_notification(table: int, user_name: str, song_title: str, song_artist: str, price: int):
     """Отправляет уведомление в Telegram с кнопкой перехода в админку"""
     try:
+        # Импортируем переменные из config
+        from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, SITE_DOMAIN, TIMEZONE
+        
         if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
             app_logger.warning("Telegram не настроен: отсутствуют токен или chat_id")
             return
