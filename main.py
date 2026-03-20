@@ -4,6 +4,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime, timedelta
+# Для телеги
+import httpx 
 import uuid
 import json
 import asyncio
@@ -165,6 +167,48 @@ async def notify_admins(message: dict):
         except Exception as e:
             error_logger.error(f"Ошибка отправки уведомления админу: {e}")
 
+# ========== TELEGRAM УВЕДОМЛЕНИЯ ==========
+
+async def send_telegram_notification(table: int, user_name: str, song_title: str, song_artist: str, price: int):
+    """Отправляет уведомление в Telegram с кнопкой перехода в админку"""
+    try:
+        if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+            app_logger.warning("Telegram не настроен: отсутствуют токен или chat_id")
+            return
+        
+        message = f"""
+🎤 <b>НОВЫЙ ЗАКАЗ!</b>
+
+🍽️ <b>Стол:</b> {table}
+👤 <b>Гость:</b> {user_name}
+🎵 <b>Песня:</b> {song_title} - {song_artist}
+💰 <b>Сумма:</b> {price}₽
+⏰ <b>Время:</b> {datetime.now(TIMEZONE).strftime('%H:%M:%S')}
+"""
+        
+        admin_url = f"{SITE_DOMAIN}/admin/dashboard"
+        keyboard = {
+            "inline_keyboard": [
+                [{"text": "🔐 Перейти в админку", "url": admin_url}]
+            ]
+        }
+        
+        async with httpx.AsyncClient() as client:
+            url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+            payload = {
+                "chat_id": TELEGRAM_CHAT_ID,
+                "text": message,
+                "parse_mode": "HTML",
+                "reply_markup": keyboard
+            }
+            response = await client.post(url, json=payload)
+            if response.status_code == 200:
+                app_logger.info(f"✅ Telegram уведомление отправлено: стол {table}")
+            else:
+                error_logger.error(f"Ошибка Telegram: {response.status_code} {response.text}")
+    except Exception as e:
+        error_logger.error(f"Ошибка отправки в Telegram: {e}")
+
 # ========== ГОСТЕВЫЕ МАРШРУТЫ ==========
 
 @app.get("/", response_class=HTMLResponse)
@@ -318,6 +362,14 @@ async def create_order(request: Request):
                 "time": datetime.now(TIMEZONE).strftime("%H:%M")
             }
         })
+        # Отправляем уведомление в Telegram
+        await send_telegram_notification(
+            table=table,
+            user_name=session_data['user_name'],
+            song_title=song['title'],
+            song_artist=song['artist'],
+            price=FREE_PRICE if order_type == 'free' else PAID_PRICE
+        )
         
         return {"success": True, "message": message}
         
