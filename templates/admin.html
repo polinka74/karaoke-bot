@@ -38,19 +38,34 @@ let updateInterval = null;
 
 // Подключение к WebSocket для уведомлений
 function connectWebSocket() {
-    ws = new WebSocket(`ws://${window.location.host}/admin/ws`);
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    ws = new WebSocket(`${protocol}//${window.location.host}/admin/ws`);
+    
+    ws.onopen = function() {
+        console.log('✅ WebSocket подключен');
+    };
+    
+    ws.onerror = function(error) {
+        console.log('❌ WebSocket ошибка:', error);
+    };
+    
+    ws.onclose = function() {
+        console.log('❌ WebSocket закрыт');
+        setTimeout(connectWebSocket, 5000);
+    };
     
     ws.onmessage = function(event) {
         const data = JSON.parse(event.data);
+        console.log('📨 Получено:', data);
         
         switch(data.type) {
             case 'new_order':
                 showNotification(`🎤 Новый заказ: Стол ${data.data.table}`, 'success');
-                loadData(); // Перезагружаем данные
+                loadData();
                 break;
             case 'table_updated':
             case 'table_closed':
-                loadData(); // Обновляем данные
+                loadData();
                 break;
             case 'system_reset':
                 showNotification('🔄 Система сброшена', 'warning');
@@ -58,13 +73,7 @@ function connectWebSocket() {
                 break;
         }
     };
-    
-    ws.onclose = function() {
-        // Пытаемся переподключиться через 5 секунд
-        setTimeout(connectWebSocket, 5000);
-    };
 }
-
 // Загрузка данных
 async function loadData() {
     try {
