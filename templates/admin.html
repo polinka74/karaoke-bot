@@ -131,7 +131,58 @@ function renderTables(tables) {
     `}).join('');
 }
     
-// Рендеринг заказов
+// // Рендеринг заказов
+// function renderOrders(orders) {
+//     const list = document.getElementById('ordersList');
+    
+//     if (orders.length === 0) {
+//         list.innerHTML = '<div class="song-card">Нет ожидающих заказов</div>';
+//         return;
+//     }
+    
+//     // Группируем заказы по столам для лучшей читаемости
+//     const ordersByTable = {};
+//     orders.forEach(order => {
+//         const table = order.table_number;
+//         if (!ordersByTable[table]) {
+//             ordersByTable[table] = [];
+//         }
+//         ordersByTable[table].push(order);
+//     });
+    
+//     // Сортируем столы по номеру
+//     const sortedTables = Object.keys(ordersByTable).sort((a, b) => a - b);
+    
+//     let html = '';
+//     sortedTables.forEach(table => {
+//         const tableOrders = ordersByTable[table];
+//         html += `<div class="table-orders-section">`;
+//         html += `<h3>Стол ${table} <span class="table-orders-count">(${tableOrders.length} заказов)</span></h3>`;
+        
+//         tableOrders.forEach(order => {
+//             html += `
+//                 <div class="song-card">
+//                     <div style="display: flex; justify-content: space-between;">
+//                         <span class="table-badge">Стол ${order.table_number}</span>
+//                         <span class="${order.order_type === 'free' ? 'price-free' : 'price-paid'}">
+//                             ${order.price}₽
+//                         </span>
+//                     </div>
+//                     <div class="song-title">${order.title} - ${order.artist}</div>
+//                     <div style="display: flex; justify-content: space-between; margin-top: 8px;">
+//                         <span><strong>Гость:</strong> ${order.user_name}</span>
+//                         <span class="hint">${new Date(order.created_at).toLocaleTimeString()}</span>
+//                     </div>
+//                 </div>
+//             `;
+//         });
+        
+//         html += `</div>`;
+//     });
+    
+//     list.innerHTML = html;
+// }
+    // Рендеринг заказов — все заказы в одном списке, новые сверху
 function renderOrders(orders) {
     const list = document.getElementById('ordersList');
     
@@ -140,44 +191,29 @@ function renderOrders(orders) {
         return;
     }
     
-    // Группируем заказы по столам для лучшей читаемости
-    const ordersByTable = {};
-    orders.forEach(order => {
-        const table = order.table_number;
-        if (!ordersByTable[table]) {
-            ordersByTable[table] = [];
-        }
-        ordersByTable[table].push(order);
+    // Сортируем все заказы по времени (новые сверху)
+    const sortedOrders = [...orders].sort((a, b) => {
+        return new Date(b.created_at) - new Date(a.created_at);
     });
     
-    // Сортируем столы по номеру
-    const sortedTables = Object.keys(ordersByTable).sort((a, b) => a - b);
-    
     let html = '';
-    sortedTables.forEach(table => {
-        const tableOrders = ordersByTable[table];
-        html += `<div class="table-orders-section">`;
-        html += `<h3>Стол ${table} <span class="table-orders-count">(${tableOrders.length} заказов)</span></h3>`;
-        
-        tableOrders.forEach(order => {
-            html += `
-                <div class="song-card">
-                    <div style="display: flex; justify-content: space-between;">
-                        <span class="table-badge">Стол ${order.table_number}</span>
-                        <span class="${order.order_type === 'free' ? 'price-free' : 'price-paid'}">
-                            ${order.price}₽
-                        </span>
-                    </div>
-                    <div class="song-title">${order.title} - ${order.artist}</div>
-                    <div style="display: flex; justify-content: space-between; margin-top: 8px;">
-                        <span><strong>Гость:</strong> ${order.user_name}</span>
-                        <span class="hint">${new Date(order.created_at).toLocaleTimeString()}</span>
-                    </div>
+    sortedOrders.forEach(order => {
+        const orderTime = new Date(order.created_at).toLocaleTimeString();
+        html += `
+            <div class="song-card">
+                <div style="display: flex; justify-content: space-between;">
+                    <span class="table-badge">Стол ${order.table_number}</span>
+                    <span class="${order.order_type === 'free' ? 'price-free' : 'price-paid'}">
+                        ${order.price}₽
+                    </span>
                 </div>
-            `;
-        });
-        
-        html += `</div>`;
+                <div class="song-title">${order.title} - ${order.artist}</div>
+                <div style="display: flex; justify-content: space-between; margin-top: 8px;">
+                    <span><strong>Гость:</strong> ${order.user_name}</span>
+                    <span class="hint">${orderTime}</span>
+                </div>
+            </div>
+        `;
     });
     
     list.innerHTML = html;
