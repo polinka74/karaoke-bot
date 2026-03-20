@@ -26,3 +26,6 @@ MAX_TABLE = 30
 
 # Домен для QR-кодов (замените на свой после деплоя)
 SITE_DOMAIN = "http://localhost:8000"  # Потом замените на реальный домен
+
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
