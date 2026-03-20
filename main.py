@@ -368,7 +368,19 @@ async def admin_login(request: Request):
         app_logger.info(f"Успешный вход в админку с IP {request.client.host}")
         
         response = JSONResponse({"success": True})
-        response.set_cookie(key="admin_auth", value="true", httponly=True)
+        # Определяем домен для куки
+        cookie_domain = None
+        if request.headers.get("host") and "karaoke-bot.ru" in request.headers.get("host"):
+            cookie_domain = ".karaoke-bot.ru"  # точка в начале = работает на всех поддоменах
+        
+        response.set_cookie(
+            key="admin_auth", 
+            value="true", 
+            httponly=True,
+            domain=cookie_domain,
+            samesite="lax",
+            path="/"
+        )
         return response
         
     except HTTPException:
