@@ -10,7 +10,7 @@ FREE_PRICE = 300      # новая песня
 PAID_PRICE = 1000     # повтор
 
 # Время блокировки стола после заказа (в секундах)
-LOCK_DURATION = 60  # 10 минут
+LOCK_DURATION = 600  # 10 минут
 
 # Часовой пояс Екатеринбург
 TIMEZONE = pytz.timezone('Asia/Yekaterinburg')
