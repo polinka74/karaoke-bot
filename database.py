@@ -21,7 +21,7 @@ class Database:
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS users (
                 user_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                session_id TEXT UNIQUE,  -- для веб-сессий
+                session_id TEXT UNIQUE,
                 table_number INTEGER,
                 user_name TEXT,
                 created_at TIMESTAMP
@@ -35,7 +35,7 @@ class Database:
                 is_active BOOLEAN DEFAULT 1,
                 current_session_id TEXT,
                 current_user_name TEXT,
-                locked_until TIMESTAMP,  -- время разблокировки
+                locked_until TIMESTAMP,
                 total_debt INTEGER DEFAULT 0,
                 updated_at TIMESTAMP
             )
@@ -58,16 +58,16 @@ class Database:
                 session_id TEXT,
                 user_name TEXT,
                 song_id INTEGER,
-                order_type TEXT,  -- 'free' или 'paid'
+                order_type TEXT,
                 price INTEGER,
-                status TEXT DEFAULT 'pending',  -- 'pending', 'completed', 'cancelled'
+                status TEXT DEFAULT 'pending',
                 created_at TIMESTAMP,
                 completed_at TIMESTAMP,
                 FOREIGN KEY (song_id) REFERENCES songs (song_id)
             )
         ''')
         
-        # Таблица блокировок песен (кто спел первым)
+        # Таблица блокировок песен
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS song_locks (
                 song_id INTEGER PRIMARY KEY,
