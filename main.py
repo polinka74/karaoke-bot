@@ -143,6 +143,11 @@ except Exception as e:
     error_logger.error(f"❌ Ошибка подключения к БД: {e}")
     raise
 
+# ===== ХРАНИЛИЩЕ СЕССИЙ В ПАМЯТИ (ДОБАВЛЕНО) =====
+user_sessions = {}
+table_locks = {}
+# ===============================================
+
 # Хранилище для WebSocket соединений админов
 admin_connections = []
 
@@ -543,16 +548,23 @@ async def admin_reset(admin_auth: Optional[str] = Cookie(None)):
         raise HTTPException(status_code=401, detail="Не авторизован")
     
     try:
+        # 1. Сбрасываем базу данных
         db.reset_all_data()
-        app_logger.info("⚠️ Админ выполнил сброс всех данных (новый день)")
+        
+        # 2. ОЧИЩАЕМ СЕССИИ В ПАМЯТИ (чтобы пользователей выкинуло)
+        global user_sessions, table_locks
+        user_sessions.clear()
+        table_locks.clear()
+        
+        app_logger.info("⚠️ Админ выполнил сброс всех данных (новый день) - сессии очищены")
         
         # Уведомляем админов
         await notify_admins({
             "type": "system_reset",
-            "data": {"message": "Все данные сброшены"}
+            "data": {"message": "Все данные сброшены, пользователи вышли из системы"}
         })
         
-        return {"success": True}
+        return {"success": True, "message": "Все данные сброшены, сессии очищены"}
     except Exception as e:
         error_logger.error(f"Ошибка при сбросе данных: {e}")
         raise HTTPException(status_code=500, detail="Ошибка при сбросе")
