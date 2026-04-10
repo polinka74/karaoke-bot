@@ -21,7 +21,7 @@ class Database:
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS users (
                 user_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                session_id TEXT UNIQUE,
+                session_id TEXT UNIQUE,  -- для веб-сессий
                 table_number INTEGER,
                 user_name TEXT,
                 created_at TIMESTAMP
@@ -35,7 +35,7 @@ class Database:
                 is_active BOOLEAN DEFAULT 1,
                 current_session_id TEXT,
                 current_user_name TEXT,
-                locked_until TIMESTAMP,
+                locked_until TIMESTAMP,  -- время разблокировки
                 total_debt INTEGER DEFAULT 0,
                 updated_at TIMESTAMP
             )
@@ -58,16 +58,16 @@ class Database:
                 session_id TEXT,
                 user_name TEXT,
                 song_id INTEGER,
-                order_type TEXT,
+                order_type TEXT,  -- 'free' или 'paid'
                 price INTEGER,
-                status TEXT DEFAULT 'pending',
+                status TEXT DEFAULT 'pending',  -- 'pending', 'completed', 'cancelled'
                 created_at TIMESTAMP,
                 completed_at TIMESTAMP,
                 FOREIGN KEY (song_id) REFERENCES songs (song_id)
             )
         ''')
         
-        # Таблица блокировок песен
+        # Таблица блокировок песен (кто спел первым)
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS song_locks (
                 song_id INTEGER PRIMARY KEY,
@@ -80,11 +80,12 @@ class Database:
         
         self.conn.commit()
     
-    def init_songs(self):
+        def init_songs(self):
         """Инициализация тестовых песен (если таблица пуста)"""
         self.cursor.execute("SELECT COUNT(*) FROM songs")
         if self.cursor.fetchone()[0] == 0:
             all_songs = [
+                # === НОВЫЕ ПЕСНИ ===
                 ("Айдахар", "Ирина Кайратовна"),
                 ("Банк", "Zivert"),
                 ("Дожди-пистолеты", "Звери"),
@@ -99,6 +100,8 @@ class Database:
                 ("Begin", "Maneskin"),
                 ("Personal Jesus", "Depeche Mode"),
                 ("What Is Love / You my heart, you my soul", "Haddaway"),
+                
+                # === СТАРЫЕ ПЕСНИ ===
                 ("Как на войне", "Агата Кристи"),
                 ("Лететь", "Амега"),
                 ("Сансара", "Баста"),
@@ -117,12 +120,14 @@ class Database:
                 ("Ничего не говори", "Рок острова"),
                 ("Он тебя целует", "Руки Вверх!"),
                 ("18 мне уже", "Руки Вверх!"),
+                # ("Крошка", "Руки Вверх!") - УДАЛЁН
                 ("Понарошку", "Тима Акимов"),
                 ("Отшумели летние дожди", "Шура"),
                 ("Ты не верь слезам", "Шура"),
                 ("Комета", "JONY"),
                 ("Проститься", "Uma2rman"),
                 ("Пожары", "XOLIDAYBOY"),
+           
             ]
             
             self.cursor.executemany(
