@@ -200,7 +200,7 @@ class Database:
             FROM songs s
             LEFT JOIN song_locks l ON s.song_id = l.song_id
             WHERE l.song_id IS NULL
-            ORDER BY s.title
+            ORDER BY s.song_id ASC
         ''')
         return [dict(row) for row in self.cursor.fetchall()]
     
