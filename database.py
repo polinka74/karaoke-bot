@@ -17,31 +17,28 @@ class Database:
     
     def create_tables(self):
         """Создание всех таблиц"""
-        # Таблица пользователей (сессий)
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS users (
                 user_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                session_id TEXT UNIQUE,  -- для веб-сессий
+                session_id TEXT UNIQUE,
                 table_number INTEGER,
                 user_name TEXT,
                 created_at TIMESTAMP
             )
         ''')
         
-        # Таблица столов (активные столы)
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS tables (
                 table_number INTEGER PRIMARY KEY,
                 is_active BOOLEAN DEFAULT 1,
                 current_session_id TEXT,
                 current_user_name TEXT,
-                locked_until TIMESTAMP,  -- время разблокировки
+                locked_until TIMESTAMP,
                 total_debt INTEGER DEFAULT 0,
                 updated_at TIMESTAMP
             )
         ''')
         
-        # Таблица песен
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS songs (
                 song_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -50,7 +47,6 @@ class Database:
             )
         ''')
         
-        # Таблица заказов
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS orders (
                 order_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -58,16 +54,15 @@ class Database:
                 session_id TEXT,
                 user_name TEXT,
                 song_id INTEGER,
-                order_type TEXT,  -- 'free' или 'paid'
+                order_type TEXT,
                 price INTEGER,
-                status TEXT DEFAULT 'pending',  -- 'pending', 'completed', 'cancelled'
+                status TEXT DEFAULT 'pending',
                 created_at TIMESTAMP,
                 completed_at TIMESTAMP,
                 FOREIGN KEY (song_id) REFERENCES songs (song_id)
             )
         ''')
         
-        # Таблица блокировок песен (кто спел первым)
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS song_locks (
                 song_id INTEGER PRIMARY KEY,
@@ -80,12 +75,11 @@ class Database:
         
         self.conn.commit()
     
-        def init_songs(self):
+    def init_songs(self):
         """Инициализация тестовых песен (если таблица пуста)"""
         self.cursor.execute("SELECT COUNT(*) FROM songs")
         if self.cursor.fetchone()[0] == 0:
             all_songs = [
-                # === НОВЫЕ ПЕСНИ ===
                 ("Айдахар", "Ирина Кайратовна"),
                 ("Банк", "Zivert"),
                 ("Дожди-пистолеты", "Звери"),
@@ -100,8 +94,6 @@ class Database:
                 ("Begin", "Maneskin"),
                 ("Personal Jesus", "Depeche Mode"),
                 ("What Is Love / You my heart, you my soul", "Haddaway"),
-                
-                # === СТАРЫЕ ПЕСНИ ===
                 ("Как на войне", "Агата Кристи"),
                 ("Лететь", "Амега"),
                 ("Сансара", "Баста"),
@@ -120,14 +112,12 @@ class Database:
                 ("Ничего не говори", "Рок острова"),
                 ("Он тебя целует", "Руки Вверх!"),
                 ("18 мне уже", "Руки Вверх!"),
-                # ("Крошка", "Руки Вверх!") - УДАЛЁН
                 ("Понарошку", "Тима Акимов"),
                 ("Отшумели летние дожди", "Шура"),
                 ("Ты не верь слезам", "Шура"),
                 ("Комета", "JONY"),
                 ("Проститься", "Uma2rman"),
                 ("Пожары", "XOLIDAYBOY"),
-           
             ]
             
             self.cursor.executemany(
@@ -136,13 +126,10 @@ class Database:
             )
             self.conn.commit()
     
-    # ===== Методы для гостей =====
-    
     def register_session(self, session_id, table_number, user_name):
         """Регистрация новой сессии гостя"""
         now = self.get_current_time()
         
-        # Проверяем, активен ли стол
         self.cursor.execute(
             "SELECT * FROM tables WHERE table_number = ?",
             (table_number,)
@@ -150,20 +137,17 @@ class Database:
         table = self.cursor.fetchone()
         
         if not table:
-            # Новый стол
             self.cursor.execute('''
                 INSERT INTO tables (table_number, current_session_id, current_user_name, updated_at)
                 VALUES (?, ?, ?, ?)
             ''', (table_number, session_id, user_name, now))
         else:
-            # Обновляем существующий стол
             self.cursor.execute('''
                 UPDATE tables 
                 SET current_session_id = ?, current_user_name = ?, is_active = 1, updated_at = ?
                 WHERE table_number = ?
             ''', (session_id, user_name, now, table_number))
         
-        # Сохраняем сессию
         self.cursor.execute('''
             INSERT INTO users (session_id, table_number, user_name, created_at)
             VALUES (?, ?, ?, ?)
@@ -173,7 +157,6 @@ class Database:
         return True
     
     def get_session(self, session_id):
-        """Получить информацию о сессии"""
         self.cursor.execute(
             "SELECT * FROM users WHERE session_id = ? ORDER BY created_at DESC LIMIT 1",
             (session_id,)
@@ -181,7 +164,6 @@ class Database:
         return self.cursor.fetchone()
     
     def get_table_info(self, table_number):
-        """Получить информацию о столе"""
         self.cursor.execute(
             "SELECT * FROM tables WHERE table_number = ?",
             (table_number,)
@@ -189,7 +171,6 @@ class Database:
         return self.cursor.fetchone()
     
     def is_table_locked(self, table_number):
-        """Проверить, заблокирован ли стол"""
         self.cursor.execute(
             "SELECT locked_until FROM tables WHERE table_number = ?",
             (table_number,)
@@ -201,7 +182,6 @@ class Database:
         return False, None
     
     def lock_table(self, table_number, duration_seconds=60):
-        """Заблокировать стол на duration_seconds секунд"""
         now = self.get_current_time()
         locked_until = now + timedelta(seconds=duration_seconds)
         
@@ -214,10 +194,7 @@ class Database:
         self.conn.commit()
         return locked_until
     
-    # ===== Методы для песен =====
-    
     def get_available_songs(self):
-        """Получить новые песни (которые ещё не пели)"""
         self.cursor.execute('''
             SELECT s.song_id, s.title, s.artist 
             FROM songs s
@@ -228,7 +205,6 @@ class Database:
         return [dict(row) for row in self.cursor.fetchall()]
     
     def get_paid_songs(self):
-        """Получить повторы (песни, которые уже пели)"""
         self.cursor.execute('''
             SELECT s.song_id, s.title, s.artist,
                    l.first_table, l.first_user_name
@@ -239,7 +215,6 @@ class Database:
         return [dict(row) for row in self.cursor.fetchall()]
     
     def is_song_sung(self, song_id):
-        """Проверить, пелась ли песня"""
         self.cursor.execute(
             "SELECT * FROM song_locks WHERE song_id = ?",
             (song_id,)
@@ -247,42 +222,34 @@ class Database:
         return self.cursor.fetchone() is not None
     
     def get_song_info(self, song_id):
-        """Получить информацию о песне"""
         self.cursor.execute(
             "SELECT * FROM songs WHERE song_id = ?",
             (song_id,)
         )
         return self.cursor.fetchone()
     
-    # ===== Методы для заказов =====
-    
     def create_order(self, table_number, session_id, user_name, song_id, order_type):
-        """Создать заказ"""
         now = self.get_current_time()
         price = FREE_PRICE if order_type == 'free' else PAID_PRICE
         
-        # Проверяем возможность заказа
         if order_type == 'free' and self.is_song_sung(song_id):
             return False, "Эту песню уже кто-то спел"
         
         if order_type == 'paid' and not self.is_song_sung(song_id):
             return False, "Эту песню ещё никто не пел"
         
-        # Создаем заказ
         self.cursor.execute('''
             INSERT INTO orders 
             (table_number, session_id, user_name, song_id, order_type, price, status, created_at)
             VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
         ''', (table_number, session_id, user_name, song_id, order_type, price, now))
         
-        # Если это первый заказ песни (free) - блокируем её
         if order_type == 'free' and not self.is_song_sung(song_id):
             self.cursor.execute('''
                 INSERT INTO song_locks (song_id, first_table, first_user_name, locked_at)
                 VALUES (?, ?, ?, ?)
             ''', (song_id, table_number, user_name, now))
         
-        # Обновляем долг стола
         self.cursor.execute('''
             UPDATE tables 
             SET total_debt = total_debt + ?, updated_at = ?
@@ -293,7 +260,6 @@ class Database:
         return True, "Заказ создан"
     
     def get_table_debt(self, table_number):
-        """Получить текущий долг стола"""
         self.cursor.execute(
             "SELECT total_debt FROM tables WHERE table_number = ?",
             (table_number,)
@@ -301,10 +267,7 @@ class Database:
         result = self.cursor.fetchone()
         return result['total_debt'] if result else 0
     
-    # ===== Методы для админа =====
-    
     def get_all_tables(self):
-        """Получить информацию по всем активным столам"""
         self.cursor.execute('''
             SELECT * FROM tables 
             WHERE is_active = 1 
@@ -313,7 +276,6 @@ class Database:
         return [dict(row) for row in self.cursor.fetchall()]
     
     def get_pending_orders(self):
-        """Получить все неоплаченные заказы"""
         self.cursor.execute('''
             SELECT o.*, s.title, s.artist 
             FROM orders o
@@ -324,17 +286,14 @@ class Database:
         return [dict(row) for row in self.cursor.fetchall()]
     
     def mark_table_as_paid(self, table_number):
-        """Отметить стол как оплаченный"""
         now = self.get_current_time()
         
-        # Обновляем статус заказов
         self.cursor.execute('''
             UPDATE orders 
             SET status = 'completed', completed_at = ?
             WHERE table_number = ? AND status = 'pending'
         ''', (now, table_number))
         
-        # Обнуляем долг стола
         self.cursor.execute('''
             UPDATE tables 
             SET total_debt = 0, updated_at = ?
@@ -345,10 +304,8 @@ class Database:
         return True
     
     def close_table(self, table_number):
-        """Закрыть столик (гости ушли)"""
         now = self.get_current_time()
         
-        # Помечаем стол как неактивный
         self.cursor.execute('''
             UPDATE tables 
             SET is_active = 0, 
@@ -359,7 +316,6 @@ class Database:
             WHERE table_number = ?
         ''', (now, table_number))
         
-        # Все неоплаченные заказы помечаем как завершённые (админ закроет отдельно)
         self.cursor.execute('''
             UPDATE orders 
             SET status = 'cancelled', completed_at = ?
@@ -370,21 +326,10 @@ class Database:
         return True
     
     def reset_all_data(self):
-        """Сбросить все данные (новый день)"""
-        now = self.get_current_time()
-        
-        # Очищаем все заказы
         self.cursor.execute("DELETE FROM orders")
-        
-        # Очищаем блокировки песен
         self.cursor.execute("DELETE FROM song_locks")
-        
-        # Очищаем столы
         self.cursor.execute("DELETE FROM tables")
-        
-        # Очищаем сессии пользователей (можно оставить для истории)
         self.cursor.execute("DELETE FROM users")
-        
         self.conn.commit()
         return True
     
